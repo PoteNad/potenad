@@ -81,6 +81,7 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
     textView.editor = self
     window.minSize = NSSize(width: 420, height: 240)
     window.tabbingIdentifier = "io.github.PoteNad.potenad.document"
+    window.tabbingMode = .preferred
     window.center()
     window.setFrameAutosaveName("PoteNadDocumentWindow")
 

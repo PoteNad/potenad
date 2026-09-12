@@ -155,6 +155,17 @@ import TextCore
     precondition(
       zoomIn.keyEquivalent == "+" && zoomIn.keyEquivalentModifierMask == [.command],
       "Zoom In must display Command-Plus")
+    let windowMenu = NSApp.mainMenu!.items[5].submenu!
+    let previousTab = windowMenu.items.first { $0.title == "Show Previous Tab" }!
+    let nextTab = windowMenu.items.first { $0.title == "Show Next Tab" }!
+    precondition(
+      previousTab.keyEquivalent == "["
+        && previousTab.keyEquivalentModifierMask == [.command, .shift])
+    precondition(
+      nextTab.keyEquivalent == "]"
+        && nextTab.keyEquivalentModifierMask == [.command, .shift])
+    let helpMenu = NSApp.mainMenu!.items[6].submenu!
+    precondition(helpMenu.items.contains { $0.title == "PoteNad on GitHub" })
     let documentCount = NSDocumentController.shared.documents.count
     precondition(appDelegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: false))
     precondition(

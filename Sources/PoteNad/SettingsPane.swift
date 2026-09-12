@@ -11,6 +11,7 @@ enum PreferenceKey {
   static let lineEnding = "lineEnding"
   static let checkSpelling = "checkSpelling"
   static let writingTools = "writingTools"
+  static let startupBehavior = "startupBehavior"
 }
 
 enum AppAppearance: String, CaseIterable {
@@ -35,6 +36,18 @@ enum AppAppearance: String, CaseIterable {
   }
 }
 
+enum StartupBehavior: String, CaseIterable {
+  case newDocument
+  case restorePreviousSession
+
+  var title: String {
+    switch self {
+    case .newDocument: "New document"
+    case .restorePreviousSession: "Restore previous session"
+    }
+  }
+}
+
 extension Notification.Name {
   static let editorDefaultsDidChange = Notification.Name("EditorDefaultsDidChange")
 }
@@ -51,6 +64,7 @@ enum AppPreferences {
       PreferenceKey.lineEnding: LineEnding.lf.rawValue,
       PreferenceKey.checkSpelling: false,
       PreferenceKey.writingTools: false,
+      PreferenceKey.startupBehavior: StartupBehavior.newDocument.rawValue,
     ])
   }
 
@@ -82,12 +96,19 @@ enum AppPreferences {
   static var writingToolsEnabled: Bool {
     UserDefaults.standard.bool(forKey: PreferenceKey.writingTools)
   }
+
+  static var startupBehavior: StartupBehavior {
+    StartupBehavior(
+      rawValue: UserDefaults.standard.string(forKey: PreferenceKey.startupBehavior) ?? "")
+      ?? .newDocument
+  }
 }
 
 @MainActor
 final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, NSMenuDelegate {
   private let appearanceControl = NSSegmentedControl(
     labels: AppAppearance.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
+  private let startupBehavior = NSPopUpButton()
   private let family = NSPopUpButton()
   private let face = NSPopUpButton()
   private let size = NSTextField()
@@ -109,7 +130,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
 
   init() {
     let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+      contentRect: NSRect(x: 0, y: 0, width: 500, height: 440),
       styleMask: [.titled, .closable], backing: .buffered, defer: false)
     window.title = "PoteNad Settings"
     window.isReleasedWhenClosed = false
@@ -131,6 +152,8 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
 
     appearanceControl.target = self
     appearanceControl.action = #selector(changeAppearance)
+    startupBehavior.target = self
+    startupBehavior.action = #selector(changeOption)
     family.menu?.delegate = self
     face.menu?.delegate = self
     family.target = self
@@ -160,6 +183,10 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
       encoding.addItem(withTitle: value.displayName)
       encoding.lastItem?.representedObject = value.rawValue
     }
+    for value in StartupBehavior.allCases {
+      startupBehavior.addItem(withTitle: value.title)
+      startupBehavior.lastItem?.representedObject = value.rawValue
+    }
     for value in LineEnding.allCases {
       lineEnding.addItem(withTitle: value.displayName)
       lineEnding.lastItem?.representedObject = value.rawValue
@@ -172,6 +199,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
     sizeControl.spacing = 6
     let grid = NSGridView(views: [
       [NSTextField(labelWithString: "Appearance:"), appearanceControl],
+      [NSTextField(labelWithString: "When PoteNad opens:"), startupBehavior],
       [NSTextField(labelWithString: "Default font:"), family],
       [NSTextField(labelWithString: "Typeface:"), face],
       [NSTextField(labelWithString: "Size:"), sizeControl],
@@ -218,6 +246,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
     let font = AppPreferences.font
     appearanceControl.selectedSegment =
       AppAppearance.allCases.firstIndex(of: AppPreferences.appearance) ?? 0
+    startupBehavior.selectItem(withTitle: AppPreferences.startupBehavior.title)
     family.removeAllItems()
     family.addItem(withTitle: font.familyName ?? "Menlo")
     fontNames = [font.fontName]
@@ -330,6 +359,9 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
     UserDefaults.standard.set(statusBar.state == .on, forKey: PreferenceKey.status)
     UserDefaults.standard.set(spelling.state == .on, forKey: PreferenceKey.checkSpelling)
     UserDefaults.standard.set(writingTools.state == .on, forKey: PreferenceKey.writingTools)
+    if let value = startupBehavior.selectedItem?.representedObject as? String {
+      UserDefaults.standard.set(value, forKey: PreferenceKey.startupBehavior)
+    }
     if let value = encoding.selectedItem?.representedObject as? String {
       UserDefaults.standard.set(value, forKey: PreferenceKey.encoding)
     }
@@ -344,6 +376,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
       PreferenceKey.appearance, PreferenceKey.fontName, PreferenceKey.fontSize, PreferenceKey.wrap,
       PreferenceKey.status, PreferenceKey.encoding, PreferenceKey.lineEnding,
       PreferenceKey.checkSpelling, PreferenceKey.writingTools,
+      PreferenceKey.startupBehavior,
     ] {
       UserDefaults.standard.removeObject(forKey: key)
     }

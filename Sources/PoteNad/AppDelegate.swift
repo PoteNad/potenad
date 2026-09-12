@@ -5,6 +5,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private lazy var settingsController = SettingsWindowController()
   private let recentMenu = NSMenu(title: "Open Recent")
   private var writingToolsItems: [NSMenuItem] = []
+  private var didFinishLaunching = false
+  private var didFinishRestoringWindows = false
+
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(finishedRestoringWindows),
+      name: NSApplication.didFinishRestoringWindowsNotification, object: NSApp)
+  }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     AppPreferences.registerDefaults()
@@ -12,11 +20,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     buildMenus()
     NotificationCenter.default.addObserver(
       self, selector: #selector(preferencesDidChange), name: .editorDefaultsDidChange, object: nil)
+    didFinishLaunching = true
+    openDocumentAfterRestorationIfNeeded()
     NSApp.activate(ignoringOtherApps: true)
   }
 
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
-  func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { true }
+  func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+    AppPreferences.startupBehavior == .newDocument
+  }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
   {
@@ -24,6 +36,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    guard AppPreferences.startupBehavior == .restorePreviousSession else {
+      SessionState.remove()
+      return .terminateNow
+    }
+    return .terminateNow
+  }
 
   func buildMenus() {
     let bar = NSMenu()
@@ -218,10 +238,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     add(window, "Zoom", #selector(NSWindow.performZoom(_:)))
     window.addItem(.separator())
     add(
-      window, "Show Previous Tab", #selector(NSWindow.selectPreviousTab(_:)), "{",
+      window, "Show Previous Tab", #selector(NSWindow.selectPreviousTab(_:)), "[",
       modifiers: [.command, .shift])
     add(
-      window, "Show Next Tab", #selector(NSWindow.selectNextTab(_:)), "}",
+      window, "Show Next Tab", #selector(NSWindow.selectNextTab(_:)), "]",
       modifiers: [.command, .shift])
     add(window, "Move Tab to New Window", #selector(NSWindow.moveTabToNewWindow(_:)))
     add(window, "Merge All Windows", #selector(NSWindow.mergeAllWindows(_:)))
@@ -231,6 +251,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     let help = menu("Help")
     add(help, "PoteNad Help", #selector(showHelp(_:)), "?", target: self)
+    help.addItem(.separator())
+    add(help, "PoteNad on GitHub", #selector(openGitHub(_:)), target: self)
     NSApp.helpMenu = help
   }
 
@@ -266,6 +288,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     updateWritingToolsItem()
   }
 
+  @objc private func finishedRestoringWindows(_ notification: Notification) {
+    didFinishRestoringWindows = true
+    openDocumentAfterRestorationIfNeeded()
+  }
+
+  private func openDocumentAfterRestorationIfNeeded() {
+    guard didFinishLaunching, didFinishRestoringWindows,
+      let controller = NSDocumentController.shared as? PoteNadDocumentController
+    else { return }
+    if !controller.documents.isEmpty {
+      SessionState.remove()
+      return
+    }
+    if AppPreferences.startupBehavior == .restorePreviousSession {
+      do {
+        if try controller.restoreSession() { return }
+      } catch {
+        if ProcessInfo.processInfo.environment["POTENAD_SESSION_STORE"] != nil {
+          fputs("Session restore failed: \(error)\n", stderr)
+        }
+        NSApp.presentError(error)
+      }
+    } else {
+      SessionState.remove()
+    }
+    controller.newDocument(nil)
+  }
+
   private func updateWritingToolsItem() {
     if #available(macOS 15.2, *) {
       writingToolsItems.forEach { $0.isHidden = !AppPreferences.writingToolsEnabled }
@@ -289,7 +339,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let alert = NSAlert()
     alert.messageText = "PoteNad Help"
     alert.informativeText =
-      "PoteNad is a plain-text editor. Use File to open, save, and print; Edit to find or replace text; Format to choose a font or word wrapping; and View to change zoom or the status bar.\n\nPoteNad preserves common text encodings and line endings. A file beginning with .LOG receives a timestamp when opened."
-    alert.runModal()
+      "Quick tips\n\n• Press ⌘T for a new tab and ⌘N for a new window.\n• Press ⌘F to find text, or ⌥⌘F to find and replace.\n• Press ⇧⌘W to toggle word wrap.\n• Press F5 to insert the current time and date.\n• Put .LOG at the start of a file to add a timestamp when it opens."
+    alert.icon = NSApp.applicationIconImage
+    alert.addButton(withTitle: "OK")
+    alert.addButton(withTitle: "View on GitHub")
+    if alert.runModal() == .alertSecondButtonReturn { openGitHub(nil) }
+  }
+
+  @objc private func openGitHub(_ sender: Any?) {
+    NSWorkspace.shared.open(URL(string: "https://github.com/PoteNad/potenad")!)
   }
 }
