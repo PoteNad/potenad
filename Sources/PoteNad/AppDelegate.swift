@@ -70,7 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     add(app, "Quit PoteNad", #selector(NSApplication.terminate(_:)), "q")
 
     let file = menu("File")
-    add(file, "New", #selector(NSDocumentController.newDocument(_:)), "n")
+    add(file, "New Window", #selector(NSDocumentController.newDocument(_:)), "n")
+    add(file, "New Tab", #selector(PoteNadDocumentController.newWindowForTab(_:)), "t")
     add(file, "Open…", #selector(NSDocumentController.openDocument(_:)), "o")
     let recentItem = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
     recentItem.submenu = recentMenu
@@ -178,7 +179,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     add(speech, "Stop Speaking", #selector(NSTextView.stopSpeaking(_:)))
 
     let format = menu("Format")
-    add(format, "Show Fonts", #selector(NSFontManager.orderFrontFontPanel(_:)), "t")
+    add(
+      format, "Show Fonts", #selector(NSFontManager.orderFrontFontPanel(_:)), "t",
+      modifiers: [.command, .option])
     format.addItem(.separator())
     add(format, "Word Wrap", #selector(Editor.toggleWrap(_:)), "w", modifiers: [.command, .shift])
     let directionItem = NSMenuItem(title: "Writing Direction", action: nil, keyEquivalent: "")

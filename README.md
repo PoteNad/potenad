@@ -13,7 +13,7 @@ brew install --cask PoteNad/potenad/potenad
 
 ## Features
 
-- Familiar document actions including New, Open, Save, Save As, Revert, Duplicate, Rename, Move, Page Setup, and Print.
+- Familiar document actions including new windows and tabs, Open, Save, Save As, Revert, Duplicate, Rename, Move, Page Setup, and Print.
 - Undo and redo, standard clipboard actions, text transformations, find and replace, Go to Line, Select Lines, and F5 Time/Date.
 - `.LOG` timestamps when a file whose first line begins with `.LOG` is opened.
 - Character wrapping, writing direction, font selection, zoom from 10–500%, and an optional status bar with line, column, encoding, and line-ending information.

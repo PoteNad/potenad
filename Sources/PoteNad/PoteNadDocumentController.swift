@@ -32,6 +32,24 @@ private final class OpenOptionsAccessory: NSView {
 final class PoteNadDocumentController: NSDocumentController {
   private var selectedOpenEncoding: TextEncoding?
 
+  @IBAction func newWindowForTab(_ sender: Any?) {
+    let sourceWindow = currentDocument?.windowControllers.first?.window
+    do {
+      let document = try openUntitledDocumentAndDisplay(false)
+      document.makeWindowControllers()
+      guard let window = document.windowControllers.first?.window else {
+        document.close()
+        return
+      }
+      if let sourceWindow, sourceWindow.isVisible {
+        sourceWindow.addTabbedWindow(window, ordered: .above)
+      }
+      document.showWindows()
+    } catch {
+      NSApp.presentError(error)
+    }
+  }
+
   func consumeSelectedOpenEncoding() -> TextEncoding? {
     defer { selectedOpenEncoding = nil }
     return selectedOpenEncoding

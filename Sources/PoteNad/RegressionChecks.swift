@@ -95,6 +95,18 @@ import TextCore
     let appMenu = NSApp.mainMenu!.items[0].submenu!
     precondition(appMenu.items.contains { $0.title == "Settings…" && $0.keyEquivalent == "," })
     precondition(!menuTitles.contains("Settings"), "Settings must not be a top-level menu")
+    let fileMenu = NSApp.mainMenu!.items[1].submenu!
+    let newWindow = fileMenu.items.first { $0.title == "New Window" }!
+    precondition(newWindow.keyEquivalent == "n")
+    let newTab = fileMenu.items.first { $0.title == "New Tab" }!
+    precondition(
+      newTab.action == #selector(PoteNadDocumentController.newWindowForTab(_:))
+        && newTab.keyEquivalent == "t" && newTab.keyEquivalentModifierMask == [.command],
+      "New Tab must use the native Command-T convention")
+    let close = fileMenu.items.first { $0.title == "Close" }!
+    precondition(
+      close.action == #selector(NSWindow.performClose(_:)) && close.keyEquivalent == "w",
+      "Close must use AppKit window closing so tabs close before their containing window")
     let editMenu = NSApp.mainMenu!.items[2].submenu!
     precondition(!editMenu.items.contains { $0.title.contains("Bing") })
     if #available(macOS 15.2, *) {
@@ -127,6 +139,11 @@ import TextCore
       redo.keyEquivalent == "z" && redo.keyEquivalentModifierMask == [.command, .shift],
       "Redo must use the standard macOS shortcut")
     let formatMenu = NSApp.mainMenu!.items[3].submenu!
+    let showFonts = formatMenu.items.first { $0.title == "Show Fonts" }!
+    precondition(
+      showFonts.keyEquivalent == "t"
+        && showFonts.keyEquivalentModifierMask == [.command, .option],
+      "Show Fonts must not conflict with New Tab")
     let wordWrap = formatMenu.items.first { $0.title == "Word Wrap" }!
     precondition(
       wordWrap.keyEquivalent == "w"
