@@ -11,8 +11,10 @@ VERSION="$1"
 DIST="$PWD/dist"
 STAGE="$DIST/staging"
 APP="$STAGE/PoteNad.app"
-ARCHIVE="$DIST/PoteNad-$VERSION-macOS.zip"
-DISK_IMAGE="$DIST/PoteNad-$VERSION-macOS.dmg"
+ARCHIVE_NAME="PoteNad-$VERSION-macOS.zip"
+DISK_IMAGE_NAME="PoteNad-$VERSION-macOS.dmg"
+ARCHIVE="$DIST/$ARCHIVE_NAME"
+DISK_IMAGE="$DIST/$DISK_IMAGE_NAME"
 
 rm -rf "$STAGE"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -25,14 +27,12 @@ lipo -create \
   .build-release-x86_64/release/PoteNad \
   -output "$APP/Contents/MacOS/PoteNad"
 
-if ! xcrun actool Assets/PoteNad.icon \
+xcrun actool Assets/PoteNad.icon \
   --compile "$APP/Contents/Resources" \
   --platform macosx \
   --minimum-deployment-target 13.0 \
   --app-icon PoteNad \
-  --output-partial-info-plist "$DIST/PoteNad-icon-info.plist" >/dev/null; then
-  rm -f "$APP/Contents/Resources/Assets.car"
-fi
+  --output-partial-info-plist "$DIST/PoteNad-icon-info.plist" >/dev/null
 cp Assets/PoteNad.icns "$APP/Contents/Resources/PoteNad.icns"
 cp LICENSE "$APP/Contents/Resources/LICENSE"
 cp Info.plist "$APP/Contents/Info.plist"
@@ -45,8 +45,8 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 rm -f "$ARCHIVE" "$DISK_IMAGE" "$DIST/PoteNad-macOS.zip" "$DIST/PoteNad-macOS.dmg"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ARCHIVE"
 cp "$ARCHIVE" "$DIST/PoteNad-macOS.zip"
-shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+(cd "$DIST" && shasum -a 256 "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256")
 hdiutil create -volname PoteNad -srcfolder "$STAGE" -ov -format UDZO "$DISK_IMAGE"
 cp "$DISK_IMAGE" "$DIST/PoteNad-macOS.dmg"
-shasum -a 256 "$DISK_IMAGE" > "$DISK_IMAGE.sha256"
+(cd "$DIST" && shasum -a 256 "$DISK_IMAGE_NAME" > "$DISK_IMAGE_NAME.sha256")
 printf 'Created %s and %s\n' "$ARCHIVE" "$DISK_IMAGE"
