@@ -1,0 +1,10 @@
+settings open, 0 lines: first 23.843 ms; median 4.409 ms; p95 23.843 ms
+typing at start, 0 lines: first 7.857 ms; median 0.181 ms; p95 7.857 ms
+zoom 100↔110, 0 lines: first 2.089 ms; median 1.807 ms; p95 2.089 ms
+find next, 0 lines: first 1.957 ms; median 1.957 ms; p95 1.957 ms
+settings open, 10000 lines: first 9.047 ms; median 5.326 ms; p95 9.047 ms
+typing at start, 10000 lines: first 11.579 ms; median 5.504 ms; p95 11.579 ms
+zoom 100↔110, 10000 lines: first 12.484 ms; median 7.621 ms; p95 12.484 ms
+find next, 10000 lines: first 7.153 ms; median 0.116 ms; p95 7.153 ms
+UTF-8 serialization, 2.1 MB: first 7.702 ms; median 7.369 ms; p95 7.702 ms
+line index insert at start, 100k lines: first 0.586 ms; median 0.142 ms; p95 0.732 ms

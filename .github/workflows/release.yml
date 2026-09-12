@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/potenad-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          printf '%s' "$CERTIFICATE_P12" | base64 -D > "$RUNNER_TEMP/developer-id.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/developer-id.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+      - name: Configure notarization
+        env:
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          printf '%s' "$API_KEY_P8" | base64 -D > "$RUNNER_TEMP/AuthKey.p8"
+          xcrun notarytool store-credentials potenad-notary \
+            --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "$API_KEY_ID" \
+            --issuer "$API_ISSUER_ID"
+
+      - name: Build, sign, and notarize
+        env:
+          SIGNING_IDENTITY: ${{ secrets.APPLE_DEVELOPER_IDENTITY }}
+          NOTARY_PROFILE: potenad-notary
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./scripts/release.sh "$VERSION"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/PoteNad-$VERSION-macOS.zip" \
+            "dist/PoteNad-$VERSION-macOS.zip.sha256" \
+            "dist/PoteNad-macOS.zip" \
+            "dist/PoteNad-$VERSION-macOS.dmg" \
+            "dist/PoteNad-$VERSION-macOS.dmg.sha256" \
+            "dist/PoteNad-macOS.dmg" \
+            --generate-notes \
+            --title "PoteNad $VERSION"
