@@ -1,5 +1,7 @@
 .build/
+.build-release-*/
 build/
+dist/
 .DS_Store
 .swiftpm/
 .build-performance/

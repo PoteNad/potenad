@@ -7,11 +7,6 @@ if [ "$#" -ne 1 ]; then
   printf 'Usage: %s VERSION\n' "$0" >&2
   exit 64
 fi
-if [ -z "${SIGNING_IDENTITY:-}" ] || [ -z "${NOTARY_PROFILE:-}" ]; then
-  printf 'SIGNING_IDENTITY and NOTARY_PROFILE are required.\n' >&2
-  exit 64
-fi
-
 VERSION="$1"
 DIST="$PWD/dist"
 STAGE="$DIST/staging"
@@ -44,24 +39,14 @@ cp Info.plist "$APP/Contents/Info.plist"
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "${GITHUB_RUN_NUMBER:-2}" "$APP/Contents/Info.plist"
 
-codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"
+codesign --force --sign - "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
 rm -f "$ARCHIVE" "$DISK_IMAGE" "$DIST/PoteNad-macOS.zip" "$DIST/PoteNad-macOS.dmg"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ARCHIVE"
-xcrun notarytool submit "$ARCHIVE" --keychain-profile "$NOTARY_PROFILE" --wait
-xcrun stapler staple "$APP"
-xcrun stapler validate "$APP"
-spctl --assess --type execute --verbose=2 "$APP"
-
-rm -f "$ARCHIVE"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$ARCHIVE"
 cp "$ARCHIVE" "$DIST/PoteNad-macOS.zip"
 shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
 hdiutil create -volname PoteNad -srcfolder "$STAGE" -ov -format UDZO "$DISK_IMAGE"
-xcrun notarytool submit "$DISK_IMAGE" --keychain-profile "$NOTARY_PROFILE" --wait
-xcrun stapler staple "$DISK_IMAGE"
-xcrun stapler validate "$DISK_IMAGE"
 cp "$DISK_IMAGE" "$DIST/PoteNad-macOS.dmg"
 shasum -a 256 "$DISK_IMAGE" > "$DISK_IMAGE.sha256"
 printf 'Created %s and %s\n' "$ARCHIVE" "$DISK_IMAGE"
