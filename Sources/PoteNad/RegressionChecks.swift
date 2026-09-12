@@ -29,6 +29,17 @@ import TextCore
     editor.window!.contentView!.layoutSubtreeIfNeeded()
     precondition(document.windowControllers.count == 1, "Document must own its editor window")
     precondition(view.usesFindBar, "Editor must use AppKit's native find bar")
+    editor.statusVisible = true
+    view.setSelectedRange(NSRange(location: 0, length: 5))
+    editor.updateStatus()
+    precondition(
+      editor.statusDetails.stringValue.hasPrefix("5 of 18 characters"),
+      "The status bar must show selected and total character counts")
+    view.setSelectedRange(NSRange(location: 0, length: 0))
+    editor.updateStatus()
+    precondition(
+      editor.statusDetails.stringValue.hasPrefix("18 characters"),
+      "The status bar must show the total character count when nothing is selected")
     if #available(macOS 15.2, *) {
       let expectedWritingTools: NSWritingToolsBehavior =
         AppPreferences.writingToolsEnabled ? .default : .none

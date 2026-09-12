@@ -205,14 +205,21 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
 
   func updateStatus() {
     guard statusVisible else { return }
-    let position = index.position(textView.selectedRange().location)
+    let selection = textView.selectedRange()
+    let position = index.position(selection.location)
+    let totalCharacters = textView.textStorage?.length ?? 0
+    let characterCount =
+      selection.length > 0
+      ? "\(selection.length) of \(totalCharacters) characters"
+      : "\(totalCharacters) \(totalCharacters == 1 ? "character" : "characters")"
     let ending = note.file.hasMixedLineEndings ? "Mixed" : note.file.lineEnding.displayName
     let value =
-      "Ln \(position.line), Col \(position.column)|\(ending)|\(note.file.encoding.displayName)|\(zoomPercent)%"
+      "Ln \(position.line), Col \(position.column)|\(characterCount)|\(ending)|\(note.file.encoding.displayName)|\(zoomPercent)%"
     guard value != lastStatus else { return }
     lastStatus = value
     status.stringValue = "Ln \(position.line), Col \(position.column)"
-    statusDetails.stringValue = "\(ending)   \(note.file.encoding.displayName)   \(zoomPercent)%"
+    statusDetails.stringValue =
+      "\(characterCount)   \(ending)   \(note.file.encoding.displayName)   \(zoomPercent)%"
   }
 
   func applyWrap() {
