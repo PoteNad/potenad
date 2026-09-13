@@ -130,7 +130,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
 
   init() {
     let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 500, height: 440),
+      contentRect: NSRect(x: 0, y: 0, width: 500, height: 500),
       styleMask: [.titled, .closable], backing: .buffered, defer: false)
     window.title = "PoteNad Settings"
     window.isReleasedWhenClosed = false
@@ -179,6 +179,41 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
     lineEnding.target = self
     lineEnding.action = #selector(changeOption)
 
+    func describe(_ control: NSView, _ text: String) {
+      control.toolTip = text
+      control.setAccessibilityHelp(text)
+    }
+    describe(appearanceControl, "Follow the system appearance or always use Light or Dark.")
+    describe(
+      startupBehavior,
+      "Start with a new document or reopen the windows, tabs, and unsaved drafts that were open when PoteNad last quit.")
+    describe(
+      family,
+      "Change the editor's display font without adding formatting to plain-text files.")
+    describe(
+      face,
+      "Change the editor's typeface without adding formatting to plain-text files.")
+    describe(size, "Set the editor's font size in points, from 1 to 512.")
+    describe(sizeStepper, "Increase or decrease the editor's font size.")
+    describe(
+      encoding,
+      "Set the encoding for new files. Existing files keep their detected encoding.")
+    describe(
+      lineEnding,
+      "Set the line endings for new files. Existing files keep their detected line endings.")
+    describe(wrapping, "Wrap long lines visually without modifying the file.")
+    describe(
+      statusBar,
+      "Show the cursor position, character count, encoding, line endings, and zoom level.")
+    describe(spelling, "Underline possible spelling mistakes while you type.")
+    describe(
+      writingTools,
+      "Show Apple's Writing Tools in the Edit menu when they are available.")
+    if #unavailable(macOS 15.2) {
+      writingTools.toolTip = "Requires macOS 15.2 or newer."
+      writingTools.setAccessibilityHelp("Requires macOS 15.2 or newer.")
+    }
+
     for value in TextEncoding.allCases {
       encoding.addItem(withTitle: value.displayName)
       encoding.lastItem?.representedObject = value.rawValue
@@ -192,28 +227,31 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
       lineEnding.lastItem?.representedObject = value.rawValue
     }
 
-    let general = NSTextField(labelWithString: "General")
-    general.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
     let sizeControl = NSStackView(views: [size, sizeStepper])
     sizeControl.orientation = .horizontal
     sizeControl.spacing = 6
-    let grid = NSGridView(views: [
+    let generalGrid = NSGridView(views: [
       [NSTextField(labelWithString: "Appearance:"), appearanceControl],
       [NSTextField(labelWithString: "When PoteNad opens:"), startupBehavior],
+    ])
+    let textGrid = NSGridView(views: [
       [NSTextField(labelWithString: "Default font:"), family],
       [NSTextField(labelWithString: "Typeface:"), face],
       [NSTextField(labelWithString: "Size:"), sizeControl],
       [NSTextField(labelWithString: "Default encoding:"), encoding],
       [NSTextField(labelWithString: "Default line endings:"), lineEnding],
     ])
-    grid.rowSpacing = 8
-    grid.columnSpacing = 12
-    grid.column(at: 0).xPlacement = .trailing
-    grid.column(at: 1).width = 260
+    for grid in [generalGrid, textGrid] {
+      grid.rowSpacing = 8
+      grid.columnSpacing = 12
+      grid.column(at: 0).xPlacement = .trailing
+      grid.column(at: 1).width = 260
+    }
     size.widthAnchor.constraint(equalToConstant: 90).isActive = true
 
     let restore = NSButton(
       title: "Restore Defaults", target: self, action: #selector(restoreDefaults))
+    describe(restore, "Reset every setting to its original value.")
     let options = NSStackView(views: [wrapping, statusBar, spelling, writingTools])
     options.orientation = .vertical
     options.alignment = .leading
@@ -221,13 +259,27 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate, N
     let buttons = NSStackView(views: [NSView(), restore])
     buttons.orientation = .horizontal
 
-    let content = NSStackView(views: [general, grid, options, buttons])
+    func group(_ title: String, _ body: NSView) -> NSStackView {
+      let heading = NSTextField(labelWithString: title)
+      heading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+      let stack = NSStackView(views: [heading, body])
+      stack.orientation = .vertical
+      stack.alignment = .leading
+      stack.spacing = 8
+      return stack
+    }
+
+    let general = group("General", generalGrid)
+    let text = group("Text", textGrid)
+    let editing = group("Editing", options)
+    let content = NSStackView(views: [general, text, editing, buttons])
     content.orientation = .vertical
     content.alignment = .leading
-    content.spacing = 14
+    content.spacing = 16
     content.edgeInsets = NSEdgeInsets(top: 22, left: 24, bottom: 20, right: 24)
     window.contentView = content
-    buttons.widthAnchor.constraint(equalTo: grid.widthAnchor).isActive = true
+    generalGrid.widthAnchor.constraint(equalTo: textGrid.widthAnchor).isActive = true
+    buttons.widthAnchor.constraint(equalTo: generalGrid.widthAnchor).isActive = true
     syncControls()
   }
 

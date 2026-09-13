@@ -339,7 +339,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let alert = NSAlert()
     alert.messageText = "PoteNad Help"
     alert.informativeText =
-      "Quick tips\n\n• Press ⌘T for a new tab and ⌘N for a new window.\n• Press ⌘F to find text, or ⌥⌘F to find and replace.\n• Press ⇧⌘W to toggle word wrap.\n• Press F5 to insert the current time and date.\n• Put .LOG at the start of a file to add a timestamp when it opens."
+      "Quick tips:\n\n• Press ⌘T for a new tab and ⌘N for a new window.\n• Press ⌘F to find text, or ⌥⌘F to find and replace.\n• Press ⇧⌘W to toggle word wrap.\n• Press F5 to insert the current time and date.\n• Put .LOG at the start of a file to add a timestamp when it opens."
     alert.icon = NSApp.applicationIconImage
     alert.addButton(withTitle: "OK")
     alert.addButton(withTitle: "View on GitHub")
