@@ -2,6 +2,8 @@
 
 PoteNad is a small, native macOS plain-text editor inspired by classic Windows 10 Notepad. It focuses on creating and editing text files without Markdown, rich text, accounts, plugins, or built-in online services. PoteNad requires macOS 13 or newer and has no third-party application dependencies.
 
+![PoteNad editing a plain-text file on macOS](Assets/PoteNad-Screenshot.png)
+
 ## Install
 
 Download PoteNad from [GitHub Releases](https://github.com/PoteNad/potenad/releases), or install it with Homebrew:

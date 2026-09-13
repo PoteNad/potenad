@@ -69,9 +69,9 @@ final class PoteNadDocument: NSDocument {
     super.init()
   }
 
-  override class var autosavesInPlace: Bool { true }
-  override class var autosavesDrafts: Bool { true }
-  override class var preservesVersions: Bool { true }
+  nonisolated override class var autosavesInPlace: Bool { true }
+  nonisolated override class var autosavesDrafts: Bool { true }
+  nonisolated override class var preservesVersions: Bool { true }
 
   override var isDocumentEdited: Bool {
     if fileURL == nil && (editor?.textView.string ?? file.text).isEmpty { return false }
@@ -129,6 +129,16 @@ final class PoteNadDocument: NSDocument {
     MainActor.assumeIsolated {
       file.hasMixedLineEndings = false
       editor?.updateStatus()
+    }
+  }
+
+  override func save(
+    to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType,
+    completionHandler: @escaping ((any Error)?) -> Void
+  ) {
+    super.save(to: url, ofType: typeName, for: saveOperation) { error in
+      if error == nil { self.syncEditedIndicator() }
+      completionHandler(error)
     }
   }
 

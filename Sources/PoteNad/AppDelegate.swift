@@ -12,6 +12,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     NotificationCenter.default.addObserver(
       self, selector: #selector(finishedRestoringWindows),
       name: NSApplication.didFinishRestoringWindowsNotification, object: NSApp)
+    if let path = ProcessInfo.processInfo.environment["POTENAD_OPEN_CHECK"] {
+      NSDocumentController.shared.openDocument(
+        withContentsOf: URL(fileURLWithPath: path), display: true
+      ) { _, _, error in
+        if let error {
+          fputs("Open check failed: \(error)\n", stderr)
+          exit(1)
+        }
+      }
+    }
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
@@ -301,6 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
       SessionState.remove()
       return
     }
+    if controller.pendingDocumentOpenCount > 0 { return }
     if AppPreferences.startupBehavior == .restorePreviousSession {
       do {
         if try controller.restoreSession() { return }

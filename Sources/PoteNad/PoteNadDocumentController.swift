@@ -34,6 +34,7 @@ final class PoteNadDocumentController: NSDocumentController {
   private var sessionReviewDelegate: AnyObject?
   private var sessionReviewSelector: Selector?
   private var sessionReviewContext: UnsafeMutableRawPointer?
+  private(set) var pendingDocumentOpenCount = 0
 
   @IBAction func newWindowForTab(_ sender: Any?) {
     let sourceWindow = NSApp.keyWindow
@@ -77,15 +78,29 @@ final class PoteNadDocumentController: NSDocumentController {
     withContentsOf url: URL, display displayDocument: Bool,
     completionHandler: @escaping (NSDocument?, Bool, (any Error)?) -> Void
   ) {
-    let transient = documents.first {
-      $0.fileURL == nil && !$0.isDocumentEdited
-        && (($0 as? PoteNadDocument)?.editor?.textView.string.isEmpty ?? false)
-    }
+    let startedWithoutDocuments = documents.isEmpty
+    let transient = documents.first(where: isTransientUntitledDocument)
+    pendingDocumentOpenCount += 1
     super.openDocument(withContentsOf: url, display: displayDocument) {
       document, alreadyOpen, error in
-      if document != nil, transient !== document { transient?.close() }
+      self.pendingDocumentOpenCount -= 1
+      if let document {
+        let untitledDocument =
+          transient
+          ?? (startedWithoutDocuments
+            ? self.documents.first {
+              $0 !== document && self.isTransientUntitledDocument($0)
+            } : nil)
+        untitledDocument?.close()
+      }
       completionHandler(document, alreadyOpen, error)
     }
+  }
+
+  private func isTransientUntitledDocument(_ document: NSDocument) -> Bool {
+    guard let document = document as? PoteNadDocument else { return false }
+    return document.fileURL == nil && !document.isDocumentEdited
+      && (document.editor?.textView.string ?? document.file.text).isEmpty
   }
 
   override func reopenDocument(

@@ -20,6 +20,15 @@ import TextCore
     precondition(PoteNadDocument.autosavesInPlace, "Saved documents must support autosave")
     precondition(PoteNadDocument.autosavesDrafts, "Untitled documents must support recovery")
     precondition(PoteNadDocument.preservesVersions, "Saved documents must support versions")
+    let backgroundCapabilities = DispatchQueue.global().sync {
+      (
+        PoteNadDocument.autosavesInPlace, PoteNadDocument.autosavesDrafts,
+        PoteNadDocument.preservesVersions
+      )
+    }
+    precondition(
+      backgroundCapabilities == (true, true, true),
+      "AppKit must be able to inspect document capabilities off the main thread")
 
     let document = PoteNadDocument()
     document.file = TextFile(text: "first\nsecond\nfirst")

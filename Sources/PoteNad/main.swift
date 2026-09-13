@@ -4,6 +4,14 @@ let app = NSApplication.shared
 let documentController = PoteNadDocumentController()
 AppPreferences.registerDefaults()
 AppPreferences.applyAppearance()
+if let path = ProcessInfo.processInfo.environment["POTENAD_OPEN_CHECK"] {
+  do {
+    try Data("Opened from Finder\n".utf8).write(to: URL(fileURLWithPath: path))
+  } catch {
+    fputs("Open check failed to create its fixture: \(error)\n", stderr)
+    exit(1)
+  }
+}
 #if PERFORMANCE
   if CommandLine.arguments.contains("--benchmark") {
     benchmark()
@@ -75,6 +83,87 @@ if ProcessInfo.processInfo.environment["POTENAD_LAUNCH_CHECK"] == "1" {
         }
       }
     }
+  }
+}
+if let path = ProcessInfo.processInfo.environment["POTENAD_SAVE_CHECK"] {
+  DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+    guard let document = documentController.documents.first as? PoteNadDocument,
+      let editor = document.editor
+    else {
+      fputs("Save check failed: expected an initial document.\n", stderr)
+      exit(1)
+    }
+    editor.textView.insertText(
+      "Saved without crashing\n", replacementRange: editor.textView.selectedRange())
+    let url = URL(fileURLWithPath: path)
+    document.save(
+      to: url, ofType: documentController.defaultType ?? "public.plain-text",
+      for: .saveAsOperation
+    ) { error in
+      if let error {
+        fputs("Save check failed: \(error)\n", stderr)
+        exit(1)
+      }
+      editor.loadText("Saved without crashing\nSaved again\n")
+      document.updateChangeCount(.changeDone)
+      document.save(
+        to: url, ofType: document.fileType ?? "public.plain-text", for: .saveOperation
+      ) { error in
+        if let error {
+          fputs("Save check failed: \(error)\n", stderr)
+          exit(1)
+        }
+        guard !document.isDocumentEdited,
+          document.windowControllers.allSatisfy({ $0.window?.isDocumentEdited == false })
+        else {
+          fputs("Save check failed: the edited indicator remained visible.\n", stderr)
+          exit(1)
+        }
+        do {
+          guard
+            try String(contentsOf: url, encoding: .utf8)
+              == "Saved without crashing\nSaved again\n"
+          else {
+            fputs("Save check failed: saved contents did not match.\n", stderr)
+            exit(1)
+          }
+          try FileManager.default.removeItem(at: url.deletingLastPathComponent())
+        } catch {
+          fputs("Save check failed: \(error)\n", stderr)
+          exit(1)
+        }
+        print("Save check passed: new and existing documents save without crashing.")
+        fflush(stdout)
+        document.close()
+        app.terminate(nil)
+      }
+    }
+  }
+}
+if let path = ProcessInfo.processInfo.environment["POTENAD_OPEN_CHECK"] {
+  DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+    let url = URL(fileURLWithPath: path)
+    let documents = documentController.documents.compactMap { $0 as? PoteNadDocument }
+    guard documents.count == 1,
+      documents[0].fileURL?.standardizedFileURL == url.standardizedFileURL,
+      documents[0].editor?.textView.string == "Opened from Finder\n"
+    else {
+      let names = documents.map(\.displayName)
+      fputs(
+        "Open check failed: expected only the requested file; found \(documents.count) documents named \(names).\n",
+        stderr)
+      exit(1)
+    }
+    documents[0].close()
+    do {
+      try FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    } catch {
+      fputs("Open check failed to clean up: \(error)\n", stderr)
+      exit(1)
+    }
+    print("Open check passed: opening a file at launch does not leave an untitled tab.")
+    fflush(stdout)
+    app.terminate(nil)
   }
 }
 if ProcessInfo.processInfo.environment["POTENAD_SESSION_PREPARE"] == "1" {
