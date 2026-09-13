@@ -81,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     let app = menu("PoteNad")
-    add(app, "About PoteNad", #selector(NSApplication.orderFrontStandardAboutPanel(_:)))
+    add(app, "About PoteNad", #selector(showAbout(_:)), target: self)
     app.addItem(.separator())
     add(app, "Settings…", #selector(showSettings(_:)), ",", target: self)
     app.addItem(.separator())
@@ -290,6 +290,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
       clear.target = self
       menu.addItem(clear)
     }
+  }
+
+  @objc func showAbout(_ sender: Any?) {
+    NSApp.orderFrontStandardAboutPanel(options: [.version: ""])
   }
 
   @objc private func showSettings(_ sender: Any?) { settingsController.show() }

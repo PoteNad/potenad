@@ -113,6 +113,10 @@ import TextCore
     let menuTitles = NSApp.mainMenu!.items.compactMap(\.submenu?.title)
     precondition(menuTitles == ["PoteNad", "File", "Edit", "Format", "View", "Window", "Help"])
     let appMenu = NSApp.mainMenu!.items[0].submenu!
+    let about = appMenu.items.first { $0.title == "About PoteNad" }!
+    precondition(
+      about.action == #selector(AppDelegate.showAbout(_:)) && about.target === appDelegate,
+      "About must use PoteNad's standard panel options")
     precondition(appMenu.items.contains { $0.title == "Settings…" && $0.keyEquivalent == "," })
     precondition(!menuTitles.contains("Settings"), "Settings must not be a top-level menu")
     let fileMenu = NSApp.mainMenu!.items[1].submenu!
