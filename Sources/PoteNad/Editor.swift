@@ -12,6 +12,28 @@ final class PlainTextView: NSTextView {
     editor.setZoom(editor.zoomPercent + Int((event.magnification * 100).rounded()))
   }
 
+  override func mouseDown(with event: NSEvent) {
+    let belowText = isBelowText(convert(event.locationInWindow, from: nil))
+    super.mouseDown(with: event)
+    // TextKit 1 maps clicks on the empty last line, or below all text, to the line above.
+    // Put the cursor at the end instead, as TextEdit does.
+    if belowText, selectedRange().length == 0, !event.modifierFlags.contains(.shift) {
+      setSelectedRange(NSRange(location: textStorage?.length ?? 0, length: 0))
+    }
+  }
+
+  /// Whether a point is on the empty line after a final newline or below the last line.
+  func isBelowText(_ point: NSPoint) -> Bool {
+    guard let layoutManager, let storage = textStorage, storage.length > 0 else { return false }
+    let length = storage.length
+    layoutManager.ensureLayout(forCharacterRange: NSRange(location: length - 1, length: 1))
+    let y = point.y - textContainerOrigin.y
+    let extra = layoutManager.extraLineFragmentRect
+    if !extra.isEmpty { return y >= extra.minY }
+    let lastGlyph = layoutManager.glyphIndexForCharacter(at: length - 1)
+    return y >= layoutManager.lineFragmentRect(forGlyphAt: lastGlyph, effectiveRange: nil).maxY
+  }
+
   override func changeFont(_ sender: Any?) {
     guard let editor, let manager = sender as? NSFontManager else {
       super.changeFont(sender)

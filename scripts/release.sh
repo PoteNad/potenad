@@ -16,6 +16,13 @@ DISK_IMAGE_NAME="PoteNad-$VERSION-macOS.dmg"
 ARCHIVE="$DIST/$ARCHIVE_NAME"
 DISK_IMAGE="$DIST/$DISK_IMAGE_NAME"
 
+POTENAD_SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+export POTENAD_SDK_VERSION
+if [ "${POTENAD_SDK_VERSION%%.*}" -lt 27 ]; then
+  printf 'Releases require the macOS 27 SDK or newer (found %s).\n' "$POTENAD_SDK_VERSION" >&2
+  exit 1
+fi
+
 rm -rf "$STAGE"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
@@ -26,6 +33,14 @@ lipo -create \
   .build-release-arm64/release/PoteNad \
   .build-release-x86_64/release/PoteNad \
   -output "$APP/Contents/MacOS/PoteNad"
+for ARCH in arm64 x86_64; do
+  BUILT_SDK="$(xcrun vtool -arch "$ARCH" -show-build "$APP/Contents/MacOS/PoteNad" | awk '$1 == "sdk" { print $2; exit }')"
+  if [ "${BUILT_SDK%%.*}" -lt 27 ]; then
+    printf 'The %s executable was linked against macOS SDK %s.\n' "$ARCH" "$BUILT_SDK" >&2
+    exit 1
+  fi
+done
+printf 'Linked against macOS SDK %s\n' "$POTENAD_SDK_VERSION"
 
 xcrun actool Assets/PoteNad.icon \
   --compile "$APP/Contents/Resources" \

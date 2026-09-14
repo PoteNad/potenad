@@ -14,6 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Select the newest Xcode
+        run: |
+          XCODE="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          printf 'macOS SDK %s\n' "$(xcrun --sdk macosx --show-sdk-version)"
+
       - name: Test
         run: ./scripts/check.sh
 

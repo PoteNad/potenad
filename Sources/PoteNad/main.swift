@@ -230,4 +230,65 @@ if ProcessInfo.processInfo.environment["POTENAD_SESSION_VERIFY_EMPTY"] == "1" {
     app.terminate(nil)
   }
 }
+if ProcessInfo.processInfo.environment["POTENAD_CLICK_CHECK"] == "1" {
+  DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+    guard let document = documentController.documents.first as? PoteNadDocument,
+      let editor = document.editor, let window = editor.window
+    else {
+      fputs("Click check failed: expected an initial document.\n", stderr)
+      exit(1)
+    }
+    let view = editor.textView
+    let text = (1...120).map { "Line \($0)" }.joined(separator: "\n") + "\n"
+    editor.loadText(text)
+    window.makeKeyAndOrderFront(nil)
+    let length = (text as NSString).length
+    view.setSelectedRange(NSRange(location: length, length: 0))
+    view.scrollRangeToVisible(view.selectedRange())
+    func click(_ point: NSPoint) {
+      let location = view.convert(point, to: nil)
+      let time = ProcessInfo.processInfo.systemUptime
+      guard
+        let down = NSEvent.mouseEvent(
+          with: .leftMouseDown, location: location, modifierFlags: [], timestamp: time,
+          windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1,
+          pressure: 1),
+        let up = NSEvent.mouseEvent(
+          with: .leftMouseUp, location: location, modifierFlags: [], timestamp: time + 0.01,
+          windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1,
+          pressure: 0)
+      else { return }
+      app.postEvent(up, atStart: false)
+      app.sendEvent(down)
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+      let layout = view.layoutManager!
+      layout.ensureLayout(forCharacterRange: NSRange(location: length - 1, length: 1))
+      let origin = view.textContainerOrigin
+      let extra = layout.extraLineFragmentRect
+      let visible = view.visibleRect
+      var failures: [String] = []
+      let targets: [(String, NSPoint, Int)] = [
+        ("the empty last line", NSPoint(x: origin.x + 4, y: origin.y + extra.midY), length),
+        ("below the text", NSPoint(x: origin.x + 4, y: min(visible.maxY - 2, origin.y + extra.maxY + 20)), length),
+      ]
+      for (name, point, expected) in targets {
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        click(point)
+        if view.selectedRange().location != expected {
+          failures.append("clicking \(name) put the cursor at \(view.selectedRange().location), not \(expected)")
+        }
+      }
+      guard failures.isEmpty else {
+        fputs("Click check failed: \(failures.joined(separator: "; ")).\n", stderr)
+        exit(1)
+      }
+      print("Click check passed: clicking the last line or below the text places the cursor at the end.")
+      fflush(stdout)
+      document.updateChangeCount(.changeCleared)
+      document.close()
+      app.terminate(nil)
+    }
+  }
+}
 withExtendedLifetime((delegate, documentController)) { app.run() }

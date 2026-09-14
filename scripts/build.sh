@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
+POTENAD_SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+export POTENAD_SDK_VERSION
 swift build -c release
 APP="$PWD/build/PoteNad.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
