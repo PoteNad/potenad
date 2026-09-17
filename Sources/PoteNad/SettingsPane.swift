@@ -12,6 +12,8 @@ enum PreferenceKey {
   static let checkSpelling = "checkSpelling"
   static let writingTools = "writingTools"
   static let startupBehavior = "startupBehavior"
+  /// Whether the status bar counts characters or words.
+  static let statusCount = "statusCount"
 }
 
 enum AppAppearance: String, CaseIterable {

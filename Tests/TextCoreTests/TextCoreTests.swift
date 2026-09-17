@@ -110,4 +110,11 @@ final class TextCoreTests: XCTestCase {
     XCTAssertEqual(index.position(text.length).line, 400_001)
     measure { for i in stride(from: 0, to: text.length, by: 1000) { _ = index.position(i) } }
   }
+
+  func testWordCount() {
+    XCTAssertEqual(TextStatistics.wordCount(""), 0)
+    XCTAssertEqual(TextStatistics.wordCount("  one, two\n\nthree-four "), 4)
+    XCTAssertEqual(TextStatistics.wordCount("don't stop"), 2)
+    XCTAssertGreaterThan(TextStatistics.wordCount("中文文本"), 0)
+  }
 }

@@ -67,6 +67,14 @@ extension PlainTextView {
   }
 }
 
+/// A generation number shared between the main thread and a background queue.
+final class LatestCount: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value = 0
+  func set(_ newValue: Int) { lock.withLock { value = newValue } }
+  func get() -> Int { lock.withLock { value } }
+}
+
 final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTextStorageDelegate,
   NSMenuItemValidation
 {
@@ -74,6 +82,8 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
   let scroll = EditorScrollView()
   let status = NSTextField(labelWithString: "")
   let statusDetails = NSTextField(labelWithString: "")
+  /// The character or word count, which opens a menu to choose between them.
+  let count = NSButton(title: "", target: nil, action: nil)
   let statusBar = NSVisualEffectView()
   private lazy var statusHeight = statusBar.heightAnchor.constraint(equalToConstant: 24)
   var index = LineIndex()
@@ -91,6 +101,18 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
     .font: displayFont, .paragraphStyle: paragraph, .foregroundColor: NSColor.textColor,
   ]
   private var lastStatus = ""
+  /// Word counts for the text and selection, counted in the background because long files
+  /// take a moment. `countedVersion` is the text version they belong to.
+  private(set) var words: (total: Int, selected: Int)?
+  private var countedVersion = -1
+  /// The text version `words.total` was counted from.
+  private var totalVersion = -1
+  private var countedSelection = NSRange(location: NSNotFound, length: 0)
+  private var textVersion = 0
+  private var countGeneration = 0
+  /// The latest count's generation, readable from the counting queue so superseded counts
+  /// can be skipped before they start.
+  private let latestCount = LatestCount()
   unowned let note: PoteNadDocument
 
   init(document: PoteNadDocument) {
@@ -152,12 +174,20 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
     status.lineBreakMode = .byTruncatingTail
     statusDetails.alignment = .right
     statusDetails.lineBreakMode = .byTruncatingHead
+    count.isBordered = false
+    count.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+    count.contentTintColor = .secondaryLabelColor
+    count.target = self
+    count.action = #selector(chooseCount(_:))
+    count.toolTip = "Count characters or words"
+    count.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
 
     root.addSubview(scroll)
     root.addSubview(statusBar)
     statusBar.addSubview(status)
+    statusBar.addSubview(count)
     statusBar.addSubview(statusDetails)
-    for view in [scroll, statusBar, status, statusDetails] {
+    for view in [scroll, statusBar, status, count, statusDetails] {
       view.translatesAutoresizingMaskIntoConstraints = false
     }
     NSLayoutConstraint.activate([
@@ -171,8 +201,9 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
       statusHeight,
       status.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor, constant: 8),
       status.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
-      statusDetails.leadingAnchor.constraint(
-        greaterThanOrEqualTo: status.trailingAnchor, constant: 12),
+      count.leadingAnchor.constraint(greaterThanOrEqualTo: status.trailingAnchor, constant: 12),
+      count.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
+      statusDetails.leadingAnchor.constraint(equalTo: count.trailingAnchor, constant: 10),
       statusDetails.trailingAnchor.constraint(equalTo: statusBar.trailingAnchor, constant: -8),
       statusDetails.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
     ])
@@ -219,29 +250,106 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
   func undoManager(for view: NSTextView) -> UndoManager? { note.undoManager }
 
   func textDidChange(_ notification: Notification) {
+    textVersion += 1
     note.syncEditedIndicator()
     updateStatus()
   }
 
   func textViewDidChangeSelection(_ notification: Notification) { updateStatus() }
 
+  var countsWords: Bool { UserDefaults.standard.string(forKey: PreferenceKey.statusCount) == "words" }
+
   func updateStatus() {
     guard statusVisible else { return }
     let selection = textView.selectedRange()
     let position = index.position(selection.location)
-    let totalCharacters = textView.textStorage?.length ?? 0
-    let characterCount =
-      selection.length > 0
-      ? "\(selection.length) of \(totalCharacters) characters"
-      : "\(totalCharacters) \(totalCharacters == 1 ? "character" : "characters")"
+    let countText: String
+    if countsWords {
+      countText = wordCountText(selection: selection)
+    } else {
+      let totalCharacters = textView.textStorage?.length ?? 0
+      countText =
+        selection.length > 0
+        ? "\(selection.length) of \(totalCharacters) characters"
+        : "\(totalCharacters) \(totalCharacters == 1 ? "character" : "characters")"
+    }
     let ending = note.file.hasMixedLineEndings ? "Mixed" : note.file.lineEnding.displayName
     let value =
-      "Ln \(position.line), Col \(position.column)|\(characterCount)|\(ending)|\(note.file.encoding.displayName)|\(zoomPercent)%"
+      "Ln \(position.line), Col \(position.column)|\(countText)|\(ending)|\(note.file.encoding.displayName)|\(zoomPercent)%"
     guard value != lastStatus else { return }
     lastStatus = value
     status.stringValue = "Ln \(position.line), Col \(position.column)"
-    statusDetails.stringValue =
-      "\(characterCount)   \(ending)   \(note.file.encoding.displayName)   \(zoomPercent)%"
+    count.attributedTitle = NSAttributedString(
+      string: countText,
+      attributes: [
+        .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+        .foregroundColor: NSColor.secondaryLabelColor,
+      ])
+    statusDetails.stringValue = "\(ending)   \(note.file.encoding.displayName)   \(zoomPercent)%"
+  }
+
+  /// The word count for the status bar, from the latest count, starting a new count when the
+  /// text or selection changed since then.
+  private func wordCountText(selection: NSRange) -> String {
+    if countedVersion != textVersion || countedSelection != selection { countWords(selection: selection) }
+    guard let words else { return "Counting words…" }
+    if selection.length > 0 { return "\(words.selected) of \(words.total) words" }
+    return "\(words.total) \(words.total == 1 ? "word" : "words")"
+  }
+
+  private func countWords(selection: NSRange) {
+    guard let storage = textView.textStorage else { return }
+    countGeneration += 1
+    let generation = countGeneration
+    let latest = latestCount
+    latest.set(generation)
+    let version = textVersion
+    countedVersion = version
+    countedSelection = selection
+    // Long files wait for a pause in typing, so each keystroke doesn't copy and count them.
+    let delay: TimeInterval = storage.length > 200_000 ? 0.3 : 0
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+      MainActor.assumeIsolated {
+        guard let self, self.countGeneration == generation else { return }
+        let recountTotal = self.totalVersion != version || self.words == nil
+        let previousTotal = self.words?.total ?? 0
+        // A copy, since the storage's string follows later edits.
+        let text = storage.mutableString.copy() as! String
+        DispatchQueue.global(qos: .utility).async {
+          guard latest.get() == generation else { return }
+          let total = recountTotal ? TextStatistics.wordCount(text) : previousTotal
+          let selected =
+            selection.length > 0 && NSMaxRange(selection) <= text.utf16.count
+            ? TextStatistics.wordCount((text as NSString).substring(with: selection)) : 0
+          DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+              guard self.countGeneration == generation else { return }
+              self.words = (total, selected)
+              self.totalVersion = version
+              self.updateStatus()
+            }
+          }
+        }
+      }
+    }
+  }
+
+  @objc private func chooseCount(_ sender: NSButton) {
+    let menu = NSMenu()
+    for (title, value) in [("Characters", "characters"), ("Words", "words")] {
+      let item = NSMenuItem(title: title, action: #selector(setCount(_:)), keyEquivalent: "")
+      item.target = self
+      item.representedObject = value
+      item.state = (value == "words") == countsWords ? .on : .off
+      menu.addItem(item)
+    }
+    menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
+  }
+
+  @objc private func setCount(_ sender: NSMenuItem) {
+    UserDefaults.standard.set(sender.representedObject as? String, forKey: PreferenceKey.statusCount)
+    // Every window shows the same kind of count.
+    NotificationCenter.default.post(name: .editorDefaultsDidChange, object: nil)
   }
 
   func applyWrap() {
@@ -385,6 +493,8 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
       forKey: PreferenceKey.checkSpelling)
     updateWritingToolsBehavior()
     applyWrap()
+    lastStatus = ""
+    updateStatus()
   }
 
   private func updateWritingToolsBehavior() {

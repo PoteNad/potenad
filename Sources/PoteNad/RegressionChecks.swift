@@ -41,14 +41,37 @@ import TextCore
     editor.statusVisible = true
     view.setSelectedRange(NSRange(location: 0, length: 5))
     editor.updateStatus()
+    let savedCount = UserDefaults.standard.string(forKey: PreferenceKey.statusCount)
+    UserDefaults.standard.set("characters", forKey: PreferenceKey.statusCount)
+    editor.updateStatus()
     precondition(
-      editor.statusDetails.stringValue.hasPrefix("5 of 18 characters"),
+      editor.count.title == "5 of 18 characters",
       "The status bar must show selected and total character counts")
     view.setSelectedRange(NSRange(location: 0, length: 0))
     editor.updateStatus()
     precondition(
-      editor.statusDetails.stringValue.hasPrefix("18 characters"),
+      editor.count.title == "18 characters",
       "The status bar must show the total character count when nothing is selected")
+    // Words are counted in the background, for the selection too.
+    UserDefaults.standard.set("words", forKey: PreferenceKey.statusCount)
+    view.setSelectedRange(NSRange(location: 6, length: 12))
+    editor.updateStatus()
+    let wordsDeadline = Date(timeIntervalSinceNow: 5)
+    while editor.count.title != "2 of 3 words", Date() < wordsDeadline {
+      RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
+    }
+    precondition(editor.count.title == "2 of 3 words", "The status bar must count selected words: \(editor.count.title)")
+    view.insertText("fourth ", replacementRange: NSRange(location: 0, length: 0))
+    view.setSelectedRange(NSRange(location: 0, length: 0))
+    editor.updateStatus()
+    while editor.count.title != "4 words", Date() < wordsDeadline {
+      RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
+    }
+    precondition(editor.count.title == "4 words", "Editing must update the word count: \(editor.count.title)")
+    view.undoManager?.undo()
+    UserDefaults.standard.set(savedCount, forKey: PreferenceKey.statusCount)
+    editor.updateStatus()
+    view.setSelectedRange(NSRange(location: 0, length: 0))
     if #available(macOS 15.2, *) {
       let expectedWritingTools: NSWritingToolsBehavior =
         AppPreferences.writingToolsEnabled ? .default : .none

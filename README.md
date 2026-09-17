@@ -21,7 +21,7 @@ The Homebrew cask verifies the app bundle and removes its quarantine attribute s
 - Familiar document actions including new windows and tabs, Open, Save, Save As, Revert, Duplicate, Rename, Move, Page Setup, and Print.
 - Undo and redo, standard clipboard actions, text transformations, find and replace, Go to Line, Select Lines, and F5 Time/Date.
 - `.LOG` timestamps when a file whose first line begins with `.LOG` is opened.
-- Word wrapping, writing direction, font selection, zoom from 10–500%, and an optional status bar with line, column, character-count, encoding, and line-ending information.
+- Word wrapping, writing direction, font selection, zoom from 10–500%, and an optional status bar with line, column, character or word counts for the file or selection (click the count to choose), encoding, and line-ending information.
 - UTF-8, UTF-8 with BOM, UTF-16 LE/BE, Windows-1252, and Mac OS Roman text.
 - Detection and preservation of LF, CRLF, and CR line endings, with encoding and line-ending choices in Save As.
 - Native macOS menus, windows, tabs, settings, system/light/dark appearances, find bar, spelling, substitutions, speech, Services, autosave, recovery, optional previous-session restoration, document versions, and optional Apple Writing Tools that are off by default.
