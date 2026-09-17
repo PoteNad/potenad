@@ -43,32 +43,47 @@ import TextCore
     editor.updateStatus()
     let savedCount = UserDefaults.standard.string(forKey: PreferenceKey.statusCount)
     UserDefaults.standard.set("characters", forKey: PreferenceKey.statusCount)
-    editor.updateStatus()
-    precondition(
-      editor.count.title == "5 of 18 characters",
-      "The status bar must show selected and total character counts")
+    // Counts arrive from the background.
+    func waitForCount(_ expected: String, _ message: String) {
+      let deadline = Date(timeIntervalSinceNow: 5)
+      editor.updateStatus()
+      while editor.count.title != expected, Date() < deadline {
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
+      }
+      precondition(editor.count.title == expected, "\(message): \(editor.count.title)")
+    }
+    waitForCount("5 of 18 characters", "The status bar must show selected and total character counts")
     view.setSelectedRange(NSRange(location: 0, length: 0))
-    editor.updateStatus()
-    precondition(
-      editor.count.title == "18 characters",
-      "The status bar must show the total character count when nothing is selected")
+    waitForCount("18 characters", "The status bar must show the total character count when nothing is selected")
+    // Characters are counted as they appear, like Plainst: an emoji is one character.
+    view.insertText("👩🏽‍💻 ", replacementRange: NSRange(location: 0, length: 0))
+    view.setSelectedRange(NSRange(location: 0, length: 7))
+    waitForCount("1 of 20 characters", "An emoji must count as one character")
+    view.undoManager?.undo()
+    view.setSelectedRange(NSRange(location: 0, length: 0))
+    waitForCount("18 characters", "Undoing must restore the character count")
     // Words are counted in the background, for the selection too.
     UserDefaults.standard.set("words", forKey: PreferenceKey.statusCount)
     view.setSelectedRange(NSRange(location: 6, length: 12))
-    editor.updateStatus()
-    let wordsDeadline = Date(timeIntervalSinceNow: 5)
-    while editor.count.title != "2 of 3 words", Date() < wordsDeadline {
-      RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
-    }
-    precondition(editor.count.title == "2 of 3 words", "The status bar must count selected words: \(editor.count.title)")
+    waitForCount("2 of 3 words", "The status bar must count selected words")
     view.insertText("fourth ", replacementRange: NSRange(location: 0, length: 0))
     view.setSelectedRange(NSRange(location: 0, length: 0))
-    editor.updateStatus()
-    while editor.count.title != "4 words", Date() < wordsDeadline {
-      RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
-    }
-    precondition(editor.count.title == "4 words", "Editing must update the word count: \(editor.count.title)")
+    waitForCount("4 words", "Editing must update the word count")
     view.undoManager?.undo()
+    // Closing a document while its count is still running must not crash.
+    do {
+      let closing = PoteNadDocument()
+      closing.file = TextFile(text: String(repeating: "Words to count before closing.\n", count: 3_000))
+      closing.makeWindowControllers()
+      let closingEditor = closing.editor!
+      closingEditor.statusVisible = true
+      for _ in 0..<5 {
+        closingEditor.textView.insertText("x", replacementRange: NSRange(location: 0, length: 0))
+        RunLoop.current.run(until: Date())
+      }
+      closing.close()
+    }
+    RunLoop.current.run(until: Date(timeIntervalSinceNow: 1))
     UserDefaults.standard.set(savedCount, forKey: PreferenceKey.statusCount)
     editor.updateStatus()
     view.setSelectedRange(NSRange(location: 0, length: 0))

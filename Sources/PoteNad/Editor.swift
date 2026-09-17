@@ -101,11 +101,12 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
     .font: displayFont, .paragraphStyle: paragraph, .foregroundColor: NSColor.textColor,
   ]
   private var lastStatus = ""
-  /// Word counts for the text and selection, counted in the background because long files
-  /// take a moment. `countedVersion` is the text version they belong to.
-  private(set) var words: (total: Int, selected: Int)?
+  /// Character or word counts for the text and selection, counted in the background because
+  /// long files take a moment. Characters are counted as they appear, so an emoji is one.
+  private(set) var counts: (words: Bool, total: Int, selected: Int)?
+  /// The text version and selection the latest count was started for.
   private var countedVersion = -1
-  /// The text version `words.total` was counted from.
+  /// The text version `counts.total` was counted from.
   private var totalVersion = -1
   private var countedSelection = NSRange(location: NSNotFound, length: 0)
   private var textVersion = 0
@@ -263,41 +264,42 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
     guard statusVisible else { return }
     let selection = textView.selectedRange()
     let position = index.position(selection.location)
-    let countText: String
-    if countsWords {
-      countText = wordCountText(selection: selection)
-    } else {
-      let totalCharacters = textView.textStorage?.length ?? 0
-      countText =
-        selection.length > 0
-        ? "\(selection.length) of \(totalCharacters) characters"
-        : "\(totalCharacters) \(totalCharacters == 1 ? "character" : "characters")"
-    }
+    let countText = self.countText(selection: selection)
     let ending = note.file.hasMixedLineEndings ? "Mixed" : note.file.lineEnding.displayName
     let value =
-      "Ln \(position.line), Col \(position.column)|\(countText)|\(ending)|\(note.file.encoding.displayName)|\(zoomPercent)%"
+      "Ln \(position.line), Col \(position.column)|\(countText ?? "")|\(ending)|\(note.file.encoding.displayName)|\(zoomPercent)%"
     guard value != lastStatus else { return }
     lastStatus = value
     status.stringValue = "Ln \(position.line), Col \(position.column)"
-    count.attributedTitle = NSAttributedString(
-      string: countText,
-      attributes: [
-        .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
-        .foregroundColor: NSColor.secondaryLabelColor,
-      ])
+    // Until the first count finishes, the count keeps what it showed.
+    if let countText {
+      count.attributedTitle = NSAttributedString(
+        string: countText,
+        attributes: [
+          .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+          .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+    }
     statusDetails.stringValue = "\(ending)   \(note.file.encoding.displayName)   \(zoomPercent)%"
   }
 
-  /// The word count for the status bar, from the latest count, starting a new count when the
-  /// text or selection changed since then.
-  private func wordCountText(selection: NSRange) -> String {
-    if countedVersion != textVersion || countedSelection != selection { countWords(selection: selection) }
-    guard let words else { return "Counting words…" }
-    if selection.length > 0 { return "\(words.selected) of \(words.total) words" }
-    return "\(words.total) \(words.total == 1 ? "word" : "words")"
+  /// The count for the status bar, from the latest count, starting a new count when the text,
+  /// selection, or kind of count changed since then.
+  private func countText(selection: NSRange) -> String? {
+    let words = countsWords
+    if counts?.words != words {
+      counts = nil
+      totalVersion = -1
+      countedVersion = -1
+    }
+    if countedVersion != textVersion || countedSelection != selection { count(words: words, selection: selection) }
+    guard let counts else { return nil }
+    let unit = words ? "word" : "character"
+    if selection.length > 0 { return "\(counts.selected) of \(counts.total) \(unit)s" }
+    return "\(counts.total) \(unit)\(counts.total == 1 ? "" : "s")"
   }
 
-  private func countWords(selection: NSRange) {
+  private func count(words: Bool, selection: NSRange) {
     guard let storage = textView.textStorage else { return }
     countGeneration += 1
     let generation = countGeneration
@@ -311,20 +313,23 @@ final class Editor: NSWindowController, NSTextViewDelegate, @preconcurrency NSTe
     DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
       MainActor.assumeIsolated {
         guard let self, self.countGeneration == generation else { return }
-        let recountTotal = self.totalVersion != version || self.words == nil
-        let previousTotal = self.words?.total ?? 0
+        let recountTotal = self.totalVersion != version || self.counts == nil
+        let previousTotal = self.counts?.total ?? 0
         // A copy, since the storage's string follows later edits.
         let text = storage.mutableString.copy() as! String
-        DispatchQueue.global(qos: .utility).async {
+        // The count must not keep the editor alive: once its document closes, the editor's
+        // reference to the document is no longer valid.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
           guard latest.get() == generation else { return }
-          let total = recountTotal ? TextStatistics.wordCount(text) : previousTotal
+          let measure = words ? TextStatistics.wordCount : TextStatistics.characterCount
+          let total = recountTotal ? measure(text) : previousTotal
           let selected =
             selection.length > 0 && NSMaxRange(selection) <= text.utf16.count
-            ? TextStatistics.wordCount((text as NSString).substring(with: selection)) : 0
-          DispatchQueue.main.async {
+            ? measure((text as NSString).substring(with: selection)) : 0
+          DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
-              guard self.countGeneration == generation else { return }
-              self.words = (total, selected)
+              guard let self, self.countGeneration == generation, self.document != nil else { return }
+              self.counts = (words, total, selected)
               self.totalVersion = version
               self.updateStatus()
             }

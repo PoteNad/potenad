@@ -111,6 +111,11 @@ final class TextCoreTests: XCTestCase {
     measure { for i in stride(from: 0, to: text.length, by: 1000) { _ = index.position(i) } }
   }
 
+  func testCharacterCount() {
+    XCTAssertEqual(TextStatistics.characterCount(""), 0)
+    XCTAssertEqual(TextStatistics.characterCount("café 👩🏽‍💻 中文\r\n"), 10)
+  }
+
   func testWordCount() {
     XCTAssertEqual(TextStatistics.wordCount(""), 0)
     XCTAssertEqual(TextStatistics.wordCount("  one, two\n\nthree-four "), 4)
